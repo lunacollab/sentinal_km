@@ -1,0 +1,65 @@
+name: quality
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  schedule:
+    - cron: "17 3 * * *"   # nightly doc-link + freshness sweep
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install lcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
+      - name: Coverage build + battery
+        run: make -C daemon coverage
+      - name: Gate on line coverage
+        run: |
+          set -euo pipefail
+          pct=$(lcov --summary daemon/build/coverage/coverage.info 2>/dev/null \
+            | awk '/lines\.\.\.\./{ gsub("%","",$2); gsub(" ","",$2); print $2 }')
+          echo "line coverage: ${pct}%"
+          awk -v p="$pct" 'BEGIN { if (p+0 < 55) exit 1 }'
+      # Pinned to the v4.6.2 tag commit.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coverage-report
+          path: daemon/build/coverage/html
+          if-no-files-found: ignore
+
+  doc-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Markdown link check (info)
+        continue-on-error: true
+        run: |
+          npx --yes markdown-link-check -c .github/markdown-link-check.json README.md docs/*.md
+      - name: README freshness guard (info)
+        run: |
+          set +e
+          proto=$(git log -1 --format=%ct -- kernel/ipc/sentinel_proto.h 2>/dev/null || echo 0)
+          docs=$(git log -1 --format=%ct -- docs 2>/dev/null || echo 0)
+          readme=$(git log -1 --format=%ct -- README.md 2>/dev/null || echo 0)
+          stale=0
+          [ -n "$proto" ] && [ "$proto" -gt "$readme" ] && stale=1
+          [ -n "$docs" ]  && [ "$docs"  -gt "$readme" ] && stale=1
+          if [ "$stale" -eq 1 ]; then
+            echo "::warning::README.md may be stale: docs/proto changed after the last README commit"
+          fi

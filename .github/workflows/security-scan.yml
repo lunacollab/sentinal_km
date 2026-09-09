@@ -1,0 +1,108 @@
+name: security-scan
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          curl -sSfL -o /tmp/gitleaks.tgz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz
+          tar -xzf /tmp/gitleaks.tgz -C /tmp
+      - name: Detect secrets (full history)
+        run: /tmp/gitleaks detect --source . --redact --no-banner --log-opts=--all
+
+  semgrep:
+    name: Semgrep (kernel + daemon)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install semgrep
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install --user --quiet semgrep
+      - name: Scan kernel and daemon sources
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          semgrep scan --config .semgrep --error --quiet kernel daemon
+
+  codegen-warnings:
+    name: Sparse + W=1 (kernel, informational)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install toolchain + sparse
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-headers-generic build-essential sparse
+      - name: Resolve KDIR
+        id: kdir
+        run: echo "kdir=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' | head -1)" >> "$GITHUB_OUTPUT"
+      - name: Module build (baseline)
+        run: make -C kernel KDIR=${{ steps.kdir.outputs.kdir }}
+      - name: Module build with W=1 (extra codegen warnings)
+        if: always()
+        continue-on-error: true
+        run: make -C kernel KDIR=${{ steps.kdir.outputs.kdir }} W=1
+      - name: Sparse check, all objects, C=2
+        continue-on-error: true
+        run: make -C kernel KDIR=${{ steps.kdir.outputs.kdir }} C=2 CHECK=sparse
+
+  daemon-static:
+    name: cppcheck + shellcheck + codespell
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - name: Install analyzers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck shellcheck python3-pip
+          pip3 install --user --quiet codespell
+      - name: cppcheck (daemon)
+        run: |
+          cppcheck --enable=warning,style,performance,portability \
+            --error-exitcode=1 --std=c11 --quiet \
+            --suppress=missingIncludeSystem --inline-suppr \
+            --force daemon/src
+      - name: shellcheck (CI, VM, and lane scripts)
+        run: shellcheck -S error .ci-run.sh tests/qemu/*.sh tests/stress/*.sh scripts/*.sh
+      - name: codespell
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          codespell --ignore-words-list="ba,ot" kernel daemon tests docs ./*.md ./*.sh \
+            --skip="*.o,*.ko,*.mod,*.cmd"
+      - name: Whitespace sanity (git diff --check vs branch base)
+        run: |
+          base=$(git merge-base HEAD origin/main 2>/dev/null || git rev-list --max-parents=0 HEAD | tail -1)
+          if ! git diff --check "$base"...HEAD; then
+            echo "whitespace errors detected"
+            git diff-tree --check HEAD 2>/dev/null
+            exit 1
+          fi

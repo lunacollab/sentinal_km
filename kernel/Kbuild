@@ -1,0 +1,50 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Kbuild for the sentinel_km out-of-tree module.
+#
+# Build from kernel/ with:  make KDIR=/lib/modules/$(uname -r)/build
+# See the top-level README for the full matrix of supported kernels.
+
+obj-m += sentinel_km.o
+
+sentinel_km-objs := core/sentinel_main.o \
+		    core/sentinel_registry.o \
+		    core/sentinel_symresolve.o \
+		    core/sentinel_filter.o \
+		    core/sentinel_probe.o \
+		    hooks/hook_execve.o \
+		    hooks/hook_openat.o \
+		    hooks/hook_connect.o \
+		    hooks/hook_copy.o \
+		    ipc/sentinel_genl.o \
+		    ipc/sentinel_ring.o \
+		    ipc/sentinel_capture.o \
+		    ipc/sentinel_ringmap.o \
+		    ipc/sentinel_crc.o
+
+# Architecture gating (P1.3):
+#   x86_64  -- the full hook set plus the asm accelerators; __x64_sys_* wrappers.
+#   arm64   -- the same hook set built with the aarch64 wrapper names and
+#              register layout; the asm accelerators stay x86_64-only, so the
+#              C fallbacks in sentinel_capture.o / sentinel_crc.o / hook_copy.c
+#              are the production path there.
+# On other arches the extra hooks are simply not installed (see sentinel_main.c
+# and docs/KERNEL_COMPAT.md).
+sentinel_km-$(CONFIG_X86_64) += hooks/hook_mmap_exec.o \
+			       hooks/hook_mprotect.o \
+			       hooks/hook_ptrace.o \
+			       hooks/hook_memfd_create.o \
+			       hooks/hook_execveat.o \
+			       hooks/hook_clone3.o \
+			       hooks/hook_io_uring_enter.o \
+			       hooks/hook_finit_module.o
+sentinel_km-$(CONFIG_ARM64) += hooks/hook_mmap_exec.o \
+			       hooks/hook_mprotect.o \
+			       hooks/hook_ptrace.o \
+			       hooks/hook_memfd_create.o \
+			       hooks/hook_execveat.o \
+			       hooks/hook_clone3.o \
+			       hooks/hook_io_uring_enter.o \
+			       hooks/hook_finit_module.o
+sentinel_km-$(CONFIG_X86_64) += arch/x86_64/sentinel_memchr_zero.o \
+			       arch/x86_64/sentinel_capture_store.o \
+			       arch/x86_64/sentinel_crc32c.o

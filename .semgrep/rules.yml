@@ -1,0 +1,67 @@
+# Semgrep rule set for the sentinel-km kernel module and daemon.
+#
+# Scope: kernel/ and daemon/ only. Tests are explicitly excluded -- test
+# harnesses are allowed to be sloppy about buffer hygiene (e.g. strcpy in a
+# test fixture is fine).
+#
+# Every rule below is a hard gate (severity ERROR). A rule that cannot be
+# satisfied by the current code is a bug in the rule, not in the code --
+# keep this set small, precise, and free of false positives.
+rules:
+  - id: unbounded-sprintf
+    message: >
+      sprintf() has no size bound. Use snprintf()/scnprintf() with the
+      destination object's size so a hostile input can never overflow the
+      buffer.
+    languages: [c]
+    severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern: sprintf($DST, $FMT)
+          - pattern: sprintf($DST, $FMT, ...)
+
+  - id: unbounded-strcpy
+    message: >
+      strcpy() is unbounded and cannot report truncation. Use strscpy() in
+      the kernel, or strlcpy (with the return checked) in the daemon.
+    languages: [c]
+    severity: ERROR
+    pattern: strcpy($DST, $SRC)
+
+  - id: unbounded-strcat
+    message: >
+      strcat() is unbounded and cannot report truncation. Prefer
+      scnprintf("%s...", ...) so the destination size is respected.
+    languages: [c]
+    severity: ERROR
+    pattern: strcat($DST, $SRC)
+
+  - id: unchecked-memcpy-user
+    message: >
+      A copy_to_user()/copy_from_user() call whose return value is ignored.
+      A fault mid-copy makes the copy short; the caller must fail the
+      operation with -EFAULT instead of reporting success on partially
+      copied data.
+    languages: [c]
+    severity: ERROR
+    patterns:
+      - pattern-either:
+          - pattern: copy_to_user($DST, $SRC, $N)
+          - pattern: copy_from_user($DST, $SRC, $N)
+      # Every metavariable below is bound by the positive pattern above.
+      # Guarded forms (if (copy ...), copy == 0, copy != 0) are the checked
+      # convention and must be excluded, otherwise the rule is pure noise.
+      - pattern-not-inside: |
+          if (copy_to_user($DST, $SRC, $N)) { ... }
+      - pattern-not-inside: |
+          if (copy_from_user($DST, $SRC, $N)) { ... }
+      - pattern-not-inside: |
+          if (copy_to_user($DST, $SRC, $N) == 0) { ... }
+      - pattern-not-inside: |
+          if (copy_from_user($DST, $SRC, $N) == 0) { ... }
+      - pattern-not-inside: |
+          if (... && copy_from_user($DST, $SRC, $N) == 0) { ... }
+      - pattern-not-inside: |
+          if (copy_to_user($DST, $SRC, $N) != 0) { ... }
+      - pattern-not-inside: |
+          if (copy_from_user($DST, $SRC, $N) != 0) { ... }

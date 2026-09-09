@@ -1,0 +1,12 @@
+# Dependabot: keep third-party actions and container images fresh.
+# Third-party actions are pinned to commit SHAs in the workflows (per the
+# spanning rules in docs/CONTRIBUTING.md); dependabot opens the bump PRs.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "ci"

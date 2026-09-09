@@ -1,0 +1,38 @@
+name: checkpatch
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checkpatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install headers (for scripts/checkpatch.pl)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-headers-generic
+      - name: Run checkpatch (errors are fatal)
+        run: |
+          KDIR=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' | head -1)
+          make -C kernel KDIR="$KDIR" checkpatch 2>&1 | tee /tmp/checkpatch.log
+          if grep -qE '^ERROR:' /tmp/checkpatch.log; then
+            echo "checkpatch reported errors:"
+            grep -E '^ERROR:' /tmp/checkpatch.log
+            exit 1
+          fi
+      - name: Run checkpatch --strict (informational)
+        run: |
+          KDIR=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' | head -1)
+          make -C kernel KDIR="$KDIR" checkpatch-strict

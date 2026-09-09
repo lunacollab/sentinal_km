@@ -1,0 +1,37 @@
+# Kernel module build artifacts. Slashless patterns anchor at no depth,
+# so they match the .o/.cmd files kbuild drops into kernel/{core,hooks,ipc}.
+*.o
+*.ko
+*.ko.*
+*.mod
+*.mod.c
+*.mod.o
+*.mod.o.cmd
+*.cmd
+*.symvers
+*.order
+kernel/Module.symvers
+kernel/modules.order
+
+# Daemon build artifacts
+daemon/sentinel-daemon
+daemon/build/
+tests/unit/daemon_parser_test
+tests/unit/cglabel_test
+tests/unit/correlator_test
+tests/unit/memchr_zero_test
+tests/unit/capture_store_test
+
+# Release staging
+dist/
+build/
+tests/unit/config_test
+tests/unit/esc_test
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db

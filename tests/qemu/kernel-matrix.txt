@@ -1,0 +1,8 @@
+# Kernel versions validated in CI against headers.
+# Format: <ubuntu-release> <headers-package> <comment>
+#
+# Keep in sync with .github/workflows/build.yml and docs/KERNEL_COMPAT.md.
+
+22.04 linux-headers-generic   # 5.15.x — baseline dev target
+24.04 linux-headers-generic   # 6.8.x — current LTS
+latest linux-headers-generic  # current mainline-ish (26.04, ~6.12+/7.0)

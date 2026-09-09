@@ -1,0 +1,17 @@
+[Unit]
+Description=sentinel-km daemon (syscall activity monitor / decorrelation)
+After=network.target
+RequiresMountsFor=/dev
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c 'modprobe -q sentinel_km || echo "warning: sentinel_km not loaded/loadable" >&2'
+ExecStart=/usr/sbin/sentinel-daemon --config /etc/sentinel/sentinel.conf
+Restart=on-failure
+RestartSec=5
+# The daemon needs to open /dev/sentinel_ring and the netlink family.
+AmbientCapabilities=CAP_NET_ADMIN
+LimitNOFILE=8192
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+# Default owners: the sentinel-org maintainers review everything.
+* @sentinel-org/maintainers
+
+# Kernel module and wire protocol: the two C sources any change to the
+# captured event layout must keep frozen together.
+/kernel/ @sentinel-org/kernel
+/kernel/ipc/ @sentinel-org/kernel
+/docs/WIRE_PROTOCOL.md @sentinel-org/kernel
+
+# Userspace daemon and its tests.
+/daemon/ @sentinel-org/daemon
+/tests/ @sentinel-org/daemon
+
+# CI/CD and packaging.
+/.github/ @sentinel-org/ops
+/packaging/ @sentinel-org/ops

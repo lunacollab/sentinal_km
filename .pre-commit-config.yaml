@@ -1,0 +1,27 @@
+# Pre-commit hooks for sentinel-km.
+#
+# Install with:  pre-commit install
+# Run on all files:  pre-commit run --all-files
+#
+# The heavy CI gates (checkpatch ERRORs, kernel build, unit+sanitized tests,
+# matrix boots) live in .github/workflows; these hooks are a fast local
+# floor that catches the common churn before a push.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+        exclude: '^kernel/.*\.(S|asm)$'
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args: ["--ignore-words-list=ba,ot", "--skip=*.o,*.ko,*.mod,*.cmd,*/build/*"]

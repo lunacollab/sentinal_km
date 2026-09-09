@@ -1,0 +1,52 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Tag push builds the module + daemon, runs the full unit battery, and on
+# success drafts a GitHub Release with the build artifacts attached.
+jobs:
+  build-and-release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install headers + toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-headers-generic build-essential clang
+      - name: Resolve KDIR
+        id: kdir
+        run: echo "kdir=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' | head -1)" >> "$GITHUB_OUTPUT"
+      - name: Build module
+        run: make -C kernel KDIR=${{ steps.kdir.outputs.kdir }}
+      - name: Build daemon + unit tests
+        run: |
+          make -C daemon test
+          make -C daemon clean
+          make -C daemon
+      - name: Stage artifacts
+        run: |
+          mkdir -p dist
+          cp kernel/sentinel_km.ko dist/
+          cp daemon/sentinel-daemon dist/
+          cp docs/WIRE_PROTOCOL.md dist/
+          sha256sum dist/* > dist/SHA256SUMS
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "Automated build of ${GITHUB_REF_NAME} (see docs/WIRE_PROTOCOL.md)."

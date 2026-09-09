@@ -1,0 +1,86 @@
+name: build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kernel-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        # One entry per header set we support. Keep in sync with
+        # docs/KERNEL_COMPAT.md and tests/qemu/kernel-matrix.txt.
+        include:
+          - ubuntu: "22.04"
+            headers: "linux-headers-generic"        # 5.15.x LTS
+          - ubuntu: "24.04"
+            headers: "linux-headers-generic"        # 6.8.x LTS
+          - ubuntu: "latest"
+            headers: "linux-headers-generic"        # current (Ubuntu 26.04, ~6.12+)
+    runs-on: ubuntu-${{ matrix.ubuntu }}
+    timeout-minutes: 30
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.headers }} build-essential
+      - name: Resolve KDIR
+        id: kdir
+        run: echo "kdir=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-*-generic' | head -1)" >> "$GITHUB_OUTPUT"
+      - name: Build module
+        run: make -C kernel KDIR=${{ steps.kdir.outputs.kdir }}
+      - name: checkpatch (errors are fatal)
+        run: |
+          make -C kernel KDIR=${{ steps.kdir.outputs.kdir }} checkpatch 2>&1 | tee /tmp/checkpatch.log
+          if grep -qE '^ERROR:' /tmp/checkpatch.log; then
+            echo "checkpatch reported errors:"
+            grep -E '^ERROR:' /tmp/checkpatch.log
+            exit 1
+          fi
+
+  daemon-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang
+      - name: Build daemon (gcc)
+        run: make -C daemon
+      - name: Build daemon (clang)
+        run: |
+          make -C daemon clean
+          make -C daemon CC=clang
+      - name: Unit tests
+        run: make -C daemon test
+
+  kernel-build-arm64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu wget xz-utils
+      # P1.3 lane: compile the module for aarch64 against a prepared arm64
+      # Kbuild tree (linux-6.6 LTS fetched to ~/.cache by the script).
+      # Compile-only -- symbol resolution and runtime stay in runtime.yml / QEMU.
+      - name: Cross-compile module (aarch64 compile lane)
+        timeout-minutes: 35
+        run: scripts/build-arm64.sh

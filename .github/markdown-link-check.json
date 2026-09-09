@@ -1,0 +1,12 @@
+{
+  "replacementPatterns": [],
+  "retryOn429": true,
+  "retryCount": 2,
+  "fallbackUrls": [],
+  "aliveStatusCodes": [200, 206, 301, 302],
+  "ignorePatterns": [
+    {
+      "pattern": "^http://(localhost|127\\.0\\.0\\.1)"
+    }
+  ]
+}

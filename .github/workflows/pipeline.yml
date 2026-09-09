@@ -1,0 +1,44 @@
+name: pipeline
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install actionlint
+        run: |
+          curl -sSfL -o /tmp/actionlint.tgz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          tar -xzf /tmp/actionlint.tgz -C /tmp
+      - name: Lint workflows
+        run: /tmp/actionlint -color
+
+  pre-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Pinned to the v4.4.0 tag commit.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install pre-commit
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pip
+          pip3 install --user pre-commit
+      - name: Run pre-commit on all files
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          pre-commit run --all-files
