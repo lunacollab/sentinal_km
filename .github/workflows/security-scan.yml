@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 20
     steps:
       # Pinned to the v4.4.0 tag commit.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
       - name: Install gitleaks
@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 20
     steps:
       # Pinned to the v4.4.0 tag commit.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Install semgrep
         run: |
           sudo apt-get update
@@ -53,7 +53,7 @@ jobs:
     timeout-minutes: 20
     steps:
       # Pinned to the v4.4.0 tag commit.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Install toolchain + sparse
         run: |
           sudo apt-get update
@@ -77,7 +77,7 @@ jobs:
     timeout-minutes: 20
     steps:
       # Pinned to the v4.4.0 tag commit.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
       - name: Install analyzers
